@@ -556,9 +556,7 @@ Hiberanate 实现了 JPA 规范，所以可以称 Hiberanate 为 JPA 的⼀种�
 
 
 
-
-
-#### 2. spring jpa使用
+### 2. spring jpa使用
 
 #### 2.1 spring jpa配置
 
@@ -839,7 +837,121 @@ JpaSpecificationExecutor<Resume> {
 }
 ```
 
+#### 2.5 问题：执行删除操作的时候只执行了查询，没有执行删除操作
+
+比如执行deleteById(id),在控制台上只能看到，select XXX where Id = ?,并没有正常执行delete from XXX，
+
+确认查询到的数据是存在的。
+
+原因：需要使用jpa的事务管理器 
+
+```xml
+<bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+    <property name="entityManagerFactory" ref="entityManagerFactory"/>
+</bean>
+```
+
+不能使用
+
+```xml
+ <!--事务管理-->
+    <bean id="transactionManager"  				class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <!--事务管理注解驱动-->
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+```
+
+#### 2.6 使用jpql查询
+
+**jpql类似于sql，只不过sql查询的是数据表和字段，而jpql操作的是对象和属性，**
+
+比如 from Resume where id = xx
+
+这种语言在hibernate中叫hql。
+
+用法：
+
+```java
+@Query("from Resume where id=?1 and name=?2")
+public List<Resume> findByJpql(Long id,String name);
+```
 
 
 
+#### 2.7 使用sql查询
+
+使⽤原⽣sql语句查询，**需要将nativeQuery属性设置为true**，默认为false（jpql）
+
+用法：
+
+```java
+@Query(value = "select * from tb_resume where name like ?1 and address like ?2",
+       nativeQuery = true)
+public List<Resume> findBySql(String name,String address);
+```
+
+
+
+#### 2.8 关于jpa查询方式分析
+
+> ========================针对查询的使⽤进⾏分析=======================
+>
+>- 调⽤继承的接⼝中的⽅法 findOne(),findById()
+>
+>- 可以引⼊jpql（jpa查询语⾔）语句进⾏查询 (=====>>>> jpql 语句类似于sql，只不过sql操作的是数据表和字段，jpql操作的是对象和属性，⽐如 from Resume where id=xx) hql
+>
+>- 可以引⼊原⽣的sql语句,nativeQuery属性设置为true
+>
+>- 可以在接⼝中⾃定义⽅法，⽽且不必引⼊jpql或者sql语句，这种⽅式叫做⽅法命名规则查询，也就是说定义的接⼝⽅法名是按照⼀定规则形成的，那么框架就能够理解我们的意图
+>
+>  ```java
+>  @Test
+>  public void testMethodName(){
+>      List<Resume> list = resumeDao.findByNameLikeAndAddress("李%","上 海");
+>      for (int i = 0; i < list.size(); i++) {
+>      Resume resume = list.get(i);
+>      System.out.println(resume);
+>      }
+>  }
+>  ```
+>
+>  
+>
+>- 动态查询  service层传⼊dao层的条件不确定，把service拿到条件封装成⼀个对象传递给
+>  Dao层，这个对象就叫做Specification（对条件的⼀个封装）
+>
+>  ```java
+>  @Test
+>  public void testSpecficationMultiCon(){
+>  /**
+>  * 需求：根据name（指定为"张三"）并且，address 以"北"开头（模糊匹
+>  配），查询简历
+>  */
+>  Specification<Resume> specification = new Specification<Resume>(){
+>      @Override
+>      public Predicate toPredicate(Root<Resume> root,
+>      CriteriaQuery<?> criteriaQuery, CriteriaBuilder criteriaBuilder) {
+>            // 获取到name属性
+>            Path<Object> name = root.get("name");
+>            Path<Object> address = root.get("address");
+>            // 条件1：使⽤CriteriaBuilder针对name属性构建条件（精准查询）
+>            Predicate predicate1 = criteriaBuilder.equal(name, "张三");
+>            // 条件2：address 以"北"开头（模糊匹配）
+>            Predicate predicate2 =
+>            criteriaBuilder.like(address.as(String.class), "北%");
+>            // 组合两个条件
+>            Predicate and = criteriaBuilder.and(predicate1,
+>            predicate2);
+>            return and;
+>        }
+>      };
+>      Optional<Resume> optional = resumeDao.findOne(specification);
+>      Resume resume = optional.get();
+>      System.out.println(resume);
+>   }
+>  }
+>  ```
 
